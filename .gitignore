@@ -1,0 +1,5 @@
+/vendor/
+/uploads/
+/config/
+composer.json
+composer.lock
