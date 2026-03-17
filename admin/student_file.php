@@ -684,8 +684,8 @@ body {
                             if($_GET['from'] === 'school_detail'){
                                 echo '<a href="school_detail.php?school_id=' . (int)$_GET['school_id'] . '" class="btn btn-sm btn-info">Back</a>';
                             }
-                        }else{
-                            echo '<a href="view_user.php?user_id='.$agent_id.'" class="btn btn-sm btn-info">Back</a>';
+                        }elseif ($role === 'user') {
+                            echo '<a href="dashboard.php" class="btn btn-sm btn-info">Back</a>';
                         } ?>
                         <a href="edit_student.php?student_id=<?php echo $student_id; ?>"
                             class="btn btn-sm btn-warning">Edit</a>

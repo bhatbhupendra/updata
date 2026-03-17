@@ -250,6 +250,7 @@ body {
                     </a><a href="notification.php" class="btn btn-outline-primary btn-sm">
                         NOTIFICATIONS/ACTIVITIES
                     </a>
+                    <a href="announcement.php" class="btn btn-outline-primary btn-sm">Announcements</a>
                     <a href="school_requirements.php" class="btn btn-outline-primary btn-sm">
                         Configure School Requirements
                     </a>

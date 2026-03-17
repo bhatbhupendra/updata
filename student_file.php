@@ -1,6 +1,8 @@
 <?php
 session_start();
 include '../config/db.php';
+include '../includes/notification_functions.php';
+
 
 if(!isset($_SESSION['user_id'])){
     header("Location: ../login.php");
@@ -16,7 +18,7 @@ if($student_id <= 0){
 }
 
 $user_id  = (int)$_SESSION['user_id'];
-$agent_id = isset($_GET['agent_id']) ? (int)$_GET['agent_id'] : 0;
+$agent_id = isset($_GET['agent_id']) ? (int)$_GET['agent_id'] : $user_id;
 $role     = $_SESSION['role'] ?? 'user';
 
 /* ---------------------------
@@ -38,8 +40,8 @@ if($role === 'admin'){
         WHERE s.id=? AND s.user_id=?
     ");
     $stmt->bind_param("ii", $student_id, $user_id);
-}
-$stmt->execute();
+    }
+    $stmt->execute();
 $student = $stmt->get_result()->fetch_assoc();
 $stmt->close();
 
@@ -53,13 +55,49 @@ $gender              = $student['gender'] ?? '';
 $date_of_birth       = $student['date_of_birth'] ?? '';
 $age                 = $student['age'] ?? '';
 $nationality         = $student['nationality'] ?? '';
-$student_email       = $student['student_email'] ?? '';
-$phone               = $student['phone'] ?? '';
-$japanese_level      = $student['japanese_level'] ?? '';
 $intake              = $student['intake'] ?? '';
-$student_information = $student['information'] ?? '';
 $school_id           = (int)($student['school_id'] ?? 0);
 $school_name         = $student['school_name'] ?? '';
+$marital_status = $student['marital_status'] ?? '';
+$student_email       = $student['student_email'] ?? '';
+$phone = $student['phone'] ?? '';
+$permanent_address = $student['permanent_address'] ?? '';
+$current_address = $student['current_address'] ?? '';
+
+$passport_number     = $student['passport_number'] ?? '';
+$passport_issue_date = $student['passport_issue_date'] ?? '';
+$passport_expiry_date = $student['passport_expiry_date'] ?? '';
+
+$father_name = $student['father_name'] ?? '';
+$father_occupation = $student['father_occupation'] ?? '';
+$mother_name = $student['mother_name'] ?? '';
+$mother_occupation = $student['mother_occupation'] ?? '';
+
+$highest_qualification = $student['highest_qualification'] ?? '';
+$last_institution_name = $student['last_institution_name'] ?? '';
+$graduation_year = $student['graduation_year'] ?? '';
+$academic_gap_years = $student['academic_gap_years'] ?? '';
+$japanese_level      = $student['japanese_level'] ?? '';
+$japanese_test_type      = $student['japanese_test_type'] ?? '';
+$japanese_exam_score      = $student['japanese_exam_score'] ?? '';
+$japanese_exam_date      = $student['japanese_exam_date'] ?? '';
+
+$sponsor_name_1      = $student['sponsor_name_1'] ?? '';
+$sponsor_relationship_1      = $student['sponsor_relationship_1'] ?? '';
+$sponsor_occupation_1      = $student['sponsor_occupation_1'] ?? '';
+$sponsor_annual_income_1      = $student['sponsor_annual_income_1'] ?? '';
+$sponsor_saving_amount_1      = $student['sponsor_saving_amount_1'] ?? '';
+
+$sponsor_name_2      = $student['sponsor_name_2'] ?? '';
+$sponsor_relationship_2      = $student['sponsor_relationship_2'] ?? '';
+$sponsor_occupation_2      = $student['sponsor_occupation_2'] ?? '';
+$sponsor_annual_income_2      = $student['sponsor_annual_income_2'] ?? '';
+$sponsor_saving_amount_2      = $student['sponsor_saving_amount_2'] ?? '';
+
+$japanese_training_hours              = $student['japanese_training_hours'] ?? '';
+$information = $student['information'] ?? '';
+$career_path = $student['career_path'] ?? '';
+
 
 /* ---------------------------
    2) Verify handler (Admin only)
@@ -111,6 +149,27 @@ if($role === 'admin' && isset($_POST['verify_action'])){
 if(isset($_GET['v']) && $_GET['v'] == "1"){
     $success = "Document verification saved.";
 }
+
+
+// Photo preview (latest jpg)
+        $img_url = "";
+        $img_q = $conn->query("
+            SELECT sd.file_path
+            FROM student_documents sd
+            JOIN document_types dt ON dt.id = sd.doc_type_id
+            WHERE sd.student_id = $student_id
+              AND LOWER(dt.file_type) = 'jpg'
+            ORDER BY sd.uploaded_at DESC
+            LIMIT 1
+        ");
+        if($img_q && $img_q->num_rows > 0){
+            $img_url = $img_q->fetch_assoc()['file_path'] ?? '';
+        }
+
+        $photo_html = "<span class='text-muted'>No Photo to Preview</span>";
+        if(!empty($img_url)){
+            $photo_html = "<img src='".htmlspecialchars($img_url)."' width='150' height='auto' class='thumb' alt='Student Photo'>";
+        }
 
 /* ---------------------------
    2.5) LIVE CHAT SEND HANDLER (Admin + Agent)
@@ -351,6 +410,7 @@ if(isset($_POST['upload_doc'])){
                                 ");
                                 $stmt->bind_param("ssi", $finalFileName, $target_file, $existing['id']);
                                 $stmt->execute();
+                                notifyFileUpload($conn,$student_id,$student_name,$docRow['doc_name'],$student['user_id'],$existing['id'] ?? null);
                                 $stmt->close();
                             } else {
                                 $stmt = $conn->prepare("
@@ -360,6 +420,7 @@ if(isset($_POST['upload_doc'])){
                                       (?, ?, ?, ?, 'pending')
                                 ");
                                 $stmt->bind_param("iiss", $student_id, $doc_type_id, $finalFileName, $target_file);
+                                notifyFileUpload($conn,$student_id,$student_name,$docRow['doc_name'],$student['user_id'],$existing['id'] ?? null);
                                 $stmt->execute();
                                 $stmt->close();
                             }
@@ -398,7 +459,18 @@ JOIN document_types dt ON dt.id = srd.doc_type_id
 LEFT JOIN student_documents sd
   ON sd.student_id = ? AND sd.doc_type_id = dt.id
 WHERE srd.school_id = ?
-ORDER BY dt.category ASC, dt.doc_name ASC
+ORDER BY 
+  FIELD(dt.category,
+    'Identity',
+    'Educational',
+    'Language',
+    'JAPANESE TRANSLATED DOCUMENTS',
+    'Financial',
+    'Study Plan',
+    'School',
+    'Additional'
+  ),
+  dt.doc_name ASC
 ";
 $stmt = $conn->prepare($sql);
 $stmt->bind_param("ii", $student_id, $school_id);
@@ -599,9 +671,21 @@ body {
                     <div class="d-flex gap-2">
                         <a href="download_zip.php?student_id=<?php echo (int)$student_id; ?>"
                             class="btn btn-sm btn-primary">ZIP FILES</a>
-                        <a href="dashboard.php" class="btn btn-sm btn-secondary">Dashboard</a>
                         <?php if($role === 'admin'){
-                            echo '<a href="view_user.php?user_id='.$agent_id.'" class="btn btn-sm btn-info">Back</a>';
+
+                            echo '<a href="../admin/dashboard.php" class="btn btn-sm btn-secondary">Dashboard</a>';
+                        }elseif($role === 'user'){
+                            echo '<a href="../user/dashboard.php" class="btn btn-sm btn-secondary">Dashboard</a>';
+                        } ?>
+                        <?php if($role === 'admin' && isset($_GET['from'])){
+                            if($_GET['from'] === 'preschool'){
+                                echo '<a href="preschool_students.php" class="btn btn-sm btn-info">Back</a>';
+                            }
+                            if($_GET['from'] === 'school_detail'){
+                                echo '<a href="school_detail.php?school_id=' . (int)$_GET['school_id'] . '" class="btn btn-sm btn-info">Back</a>';
+                            }
+                        }elseif ($role === 'user') {
+                            echo '<a href="dashboard.php" class="btn btn-sm btn-info">Back</a>';
                         } ?>
                         <a href="edit_student.php?student_id=<?php echo $student_id; ?>"
                             class="btn btn-sm btn-warning">Edit</a>
@@ -611,24 +695,73 @@ body {
                 <hr class="hr-tight">
 
                 <div class="row g-2">
-                    <div class="col-md-5">
+                    <div class="col-md-3">
+                        <div><b><u>Personal Information</u></b></div>
                         <div><b>Name:</b> <?php echo htmlspecialchars($student_name); ?>
                             (<?php echo htmlspecialchars($student_name_jp); ?>)</div>
-                        <div><b>Nationality:</b> <?php echo htmlspecialchars($nationality); ?></div>
                         <div><b>Gender:</b> <?php echo htmlspecialchars($gender); ?></div>
-                        <div><b>Intake:</b> <?php echo htmlspecialchars($intake); ?></div>
-                        <div><b>Japanese Level:</b> <?php echo htmlspecialchars($japanese_level); ?></div>
-                    </div>
-                    <div class="col-md-5">
-                        <div><b>Information:</b></div>
-                        <div class="small-muted"><?php echo nl2br(htmlspecialchars($student_information)); ?></div>
-                        <div class="small-muted"><b>DOB:</b> <?php echo htmlspecialchars($date_of_birth); ?>
+                        <div><b>DOB:</b> <?php echo htmlspecialchars($date_of_birth); ?>
                             (<?php echo htmlspecialchars($age); ?>)</div>
-                        <div class="small-muted"><b>Email:</b> <?php echo htmlspecialchars($student_email); ?></div>
+                        <div><b>Nationality:</b> <?php echo htmlspecialchars($nationality); ?></div>
+                        <div><b>Intake:</b> <?php echo htmlspecialchars($intake); ?></div>
+                        <div><b>School:</b> <?php echo htmlspecialchars($school_name); ?></div>
+                        <div><b>Marital Status:</b> <?php echo htmlspecialchars($marital_status); ?></div>
+                        <div><b>Email:</b> <?php echo htmlspecialchars($student_email); ?></div>
+                        <div><b>Phone:</b> <?php echo htmlspecialchars($phone); ?></div>
+                        <div><b>Permanent_address:</b> <?php echo htmlspecialchars($permanent_address); ?></div>
+                        <div><b>Current_address:</b> <?php echo htmlspecialchars($current_address); ?></div>
+                        <div><b><u>Family Information</u></b></div>
+                        <div><b>Father Name:</b> <?php echo htmlspecialchars($father_name); ?></div>
+                        <div><b>Father Occupation:</b> <?php echo htmlspecialchars($father_occupation); ?></div>
+                        <div><b>Mother Name:</b> <?php echo htmlspecialchars($mother_name); ?></div>
+                        <div><b>Mother Occupation:</b> <?php echo htmlspecialchars($mother_occupation); ?></div>
                     </div>
-                    <div class="col-md-2">
-                        <div><b>Phone:</b></div>
-                        <div class="small-muted"><?php echo htmlspecialchars($phone); ?></div>
+                    <div class="col-md-3">
+                        <div>
+                            <b><u>Academics Information</u></b>
+                        </div>
+                        <div><b>Highest Qualification:</b> <?php echo htmlspecialchars($highest_qualification); ?></div>
+                        <div><b>Last Institution:</b> <?php echo htmlspecialchars($last_institution_name); ?></div>
+                        <div><b>Graduate Year:</b> <?php echo htmlspecialchars($graduation_year); ?></div>
+                        <div><b>Academic Gap:</b> <?php echo htmlspecialchars($academic_gap_years); ?></div>
+                        <div><b><u>Japanese Language Information</u></b></div>
+                        <div><b>Level:</b> <?php echo htmlspecialchars($japanese_level); ?></div>
+                        <div><b>Test Type:</b> <?php echo htmlspecialchars($japanese_test_type); ?></div>
+                        <div><b>Exam Score:</b> <?php echo htmlspecialchars($japanese_exam_score); ?></div>
+                        <div><b>Exam Date:</b> <?php echo htmlspecialchars($japanese_exam_date); ?></div>
+                        <div><b>Training Hours:</b> <?php echo htmlspecialchars($japanese_training_hours); ?>
+                        </div>
+                        <div><b><u>Passport Information</u></b></div>
+                        <div><b>Number:</b> <?php echo htmlspecialchars($passport_number); ?></div>
+                        <div><b>Issue Date:</b> <?php echo htmlspecialchars($passport_issue_date); ?></div>
+                        <div><b>Expiry Date:</b> <?php echo htmlspecialchars($passport_expiry_date); ?></div>
+
+                    </div>
+                    <div class="col-md-3">
+                        <div><b><u>Sponsor 1 Information</u></b></div>
+                        <div><b> Name:</b> <?php echo htmlspecialchars($sponsor_name_1); ?></div>
+                        <div><b> Relationship:</b> <?php echo htmlspecialchars($sponsor_relationship_1); ?>
+                        </div>
+                        <div><b> Occupation:</b> <?php echo htmlspecialchars($sponsor_occupation_1); ?></div>
+                        <div><b> Annual Income:</b> <?php echo htmlspecialchars($sponsor_annual_income_1); ?>
+                        </div>
+                        <div><b> Saving Amount:</b> <?php echo htmlspecialchars($sponsor_saving_amount_1); ?>
+                        </div>
+                        <div><b><u>Sponsor 2 Information</u></b></div>
+                        <div><b>Name:</b> <?php echo htmlspecialchars($sponsor_name_2); ?></div>
+                        <div><b>Relationship:</b> <?php echo htmlspecialchars($sponsor_relationship_2); ?>
+                        </div>
+                        <div><b>Occupation:</b> <?php echo htmlspecialchars($sponsor_occupation_2); ?></div>
+                        <div><b>Annual Income:</b> <?php echo htmlspecialchars($sponsor_annual_income_2); ?>
+                        </div>
+                        <div><b>Saving Amount:</b> <?php echo htmlspecialchars($sponsor_saving_amount_2); ?>
+                        </div>
+                    </div>
+                    <div class="col-md-3">
+                        <div><b><u>Photo</u></b></div>
+                        <div><?php echo $photo_html; ?></div>
+                        <div><b>Information:</b> <?php echo htmlspecialchars($information); ?></div>
+                        <div><b>Career Path:</b> <?php echo htmlspecialchars($career_path); ?></div>
                     </div>
                 </div>
             </div>
@@ -656,7 +789,8 @@ body {
             <?php foreach($groupedDocs as $category => $docs): ?>
             <div class="card-box">
                 <div class="d-flex justify-content-between align-items-center mb-2">
-                    <h6 class="m-0" style="font-weight:800;"><?php echo htmlspecialchars($category); ?> Documents</h6>
+                    <h6 class="m-0" style="font-weight:800;"><?php echo htmlspecialchars($category); ?> Documents
+                    </h6>
                     <span class="badge badge-soft"><?php echo count($docs); ?> items</span>
                 </div>
 
@@ -711,7 +845,8 @@ body {
                                 <td>
                                     <?php if($row['submitted_id']): ?>
                                     <span class="badge badge-submitted">SUBMITTED</span>
-                                    <div class="small-muted">On: <?php echo htmlspecialchars($row['uploaded_at']); ?>
+                                    <div class="small-muted">On:
+                                        <?php echo htmlspecialchars($row['uploaded_at']); ?>
                                     </div>
 
                                     <div class="mt-1">
@@ -1090,7 +1225,8 @@ document.addEventListener('DOMContentLoaded', function() {
         verifyConfirmModal.show();
     }
 
-    document.getElementById('viewerApproveBtn')?.addEventListener('click', () => openVerifyConfirm('approved'));
+    document.getElementById('viewerApproveBtn')?.addEventListener('click', () => openVerifyConfirm(
+        'approved'));
     document.getElementById('viewerDisapproveBtn')?.addEventListener('click', () => openVerifyConfirm(
         'disapproved'));
 
